@@ -1,0 +1,222 @@
+[
+  {
+    "model": "catalog.cablebrand",
+    "pk": 1,
+    "fields": { "name": "ВВГ", "description": "Силовой кабель с ПВХ изоляцией" }
+  },
+  {
+    "model": "catalog.cablebrand",
+    "pk": 2,
+    "fields": { "name": "NYM", "description": "Кабель для фиксированной прокладки" }
+  },
+  {
+    "model": "catalog.installationcondition",
+    "pk": 1,
+    "fields": {
+      "name": "В воздухе, +25°C, группа 1",
+      "group_code": "G1",
+      "ambient_temp_c": 25,
+      "k_temp": 1.0,
+      "k_group": 1.0
+    }
+  },
+  {
+    "model": "catalog.installationcondition",
+    "pk": 2,
+    "fields": {
+      "name": "В трубе, +25°C, группа 2",
+      "group_code": "G2",
+      "ambient_temp_c": 25,
+      "k_temp": 1.0,
+      "k_group": 0.85
+    }
+  },
+  {
+    "model": "catalog.cable",
+    "pk": 1,
+    "fields": {
+      "brand": 1,
+      "name": "ВВГ 3×1.5",
+      "section_mm2": 1.5,
+      "cores": 3,
+      "material": "Cu",
+      "r_mohm_per_m": 12.6,
+      "x_mohm_per_m": 0.08,
+      "i_long_a": 19,
+      "mass_kg_per_m": 0.09
+    }
+  },
+  {
+    "model": "catalog.cable",
+    "pk": 2,
+    "fields": {
+      "brand": 1,
+      "name": "ВВГ 3×2.5",
+      "section_mm2": 2.5,
+      "cores": 3,
+      "material": "Cu",
+      "r_mohm_per_m": 7.55,
+      "x_mohm_per_m": 0.08,
+      "i_long_a": 27,
+      "mass_kg_per_m": 0.13
+    }
+  },
+  {
+    "model": "catalog.cable",
+    "pk": 3,
+    "fields": {
+      "brand": 1,
+      "name": "ВВГ 3×4",
+      "section_mm2": 4.0,
+      "cores": 3,
+      "material": "Cu",
+      "r_mohm_per_m": 4.65,
+      "x_mohm_per_m": 0.08,
+      "i_long_a": 38,
+      "mass_kg_per_m": 0.2
+    }
+  },
+  {
+    "model": "catalog.cable",
+    "pk": 4,
+    "fields": {
+      "brand": 1,
+      "name": "ВВГ 3×6",
+      "section_mm2": 6.0,
+      "cores": 3,
+      "material": "Cu",
+      "r_mohm_per_m": 3.12,
+      "x_mohm_per_m": 0.08,
+      "i_long_a": 46,
+      "mass_kg_per_m": 0.28
+    }
+  },
+  {
+    "model": "catalog.cable",
+    "pk": 5,
+    "fields": {
+      "brand": 1,
+      "name": "ВВГ 3×10",
+      "section_mm2": 10.0,
+      "cores": 3,
+      "material": "Cu",
+      "r_mohm_per_m": 1.84,
+      "x_mohm_per_m": 0.08,
+      "i_long_a": 63,
+      "mass_kg_per_m": 0.45
+    }
+  },
+  {
+    "model": "catalog.cable",
+    "pk": 6,
+    "fields": {
+      "brand": 1,
+      "name": "ВВГ 3×16",
+      "section_mm2": 16.0,
+      "cores": 3,
+      "material": "Cu",
+      "r_mohm_per_m": 1.2,
+      "x_mohm_per_m": 0.08,
+      "i_long_a": 85,
+      "mass_kg_per_m": 0.68
+    }
+  },
+  {
+    "model": "catalog.cable",
+    "pk": 7,
+    "fields": {
+      "brand": 1,
+      "name": "ВВГ 3×25",
+      "section_mm2": 25.0,
+      "cores": 3,
+      "material": "Cu",
+      "r_mohm_per_m": 0.74,
+      "x_mohm_per_m": 0.08,
+      "i_long_a": 112,
+      "mass_kg_per_m": 1.05
+    }
+  },
+  {
+    "model": "catalog.circuitbreaker",
+    "pk": 1,
+    "fields": {
+      "manufacturer": "ABB",
+      "model_name": "S201 C16",
+      "in_a": 16,
+      "icu_ka": 6,
+      "curve": "C",
+      "poles": 1
+    }
+  },
+  {
+    "model": "catalog.circuitbreaker",
+    "pk": 2,
+    "fields": {
+      "manufacturer": "ABB",
+      "model_name": "S203 C25",
+      "in_a": 25,
+      "icu_ka": 6,
+      "curve": "C",
+      "poles": 3
+    }
+  },
+  {
+    "model": "catalog.circuitbreaker",
+    "pk": 3,
+    "fields": {
+      "manufacturer": "IEK",
+      "model_name": "ВА47-29 C16",
+      "in_a": 16,
+      "icu_ka": 4.5,
+      "curve": "C",
+      "poles": 1
+    }
+  },
+  {
+    "model": "catalog.circuitbreaker",
+    "pk": 4,
+    "fields": {
+      "manufacturer": "Schneider",
+      "model_name": "iC60N C20",
+      "in_a": 20,
+      "icu_ka": 6,
+      "curve": "C",
+      "poles": 1
+    }
+  },
+  {
+    "model": "catalog.transformer",
+    "pk": 1,
+    "fields": {
+      "name": "ТМГ-630/10",
+      "s_kva": 630,
+      "u_primary_kv": 10,
+      "u_secondary_v": 400,
+      "uk_percent": 6.0
+    }
+  },
+  {
+    "model": "catalog.fan",
+    "pk": 1,
+    "fields": {
+      "manufacturer": "Systemair",
+      "model_name": "TD-500/150",
+      "q_max_m3h": 1200,
+      "p_max_pa": 350,
+      "efficiency": 72,
+      "curve_points": [[200, 320], [600, 280], [1200, 150]]
+    }
+  },
+  {
+    "model": "catalog.fan",
+    "pk": 2,
+    "fields": {
+      "manufacturer": "Vents",
+      "model_name": "TT 315",
+      "q_max_m3h": 2500,
+      "p_max_pa": 450,
+      "efficiency": 68,
+      "curve_points": [[500, 420], [1500, 350], [2500, 200]]
+    }
+  }
+]
