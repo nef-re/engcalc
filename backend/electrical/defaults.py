@@ -17,9 +17,17 @@ DEFAULT_EDGE = {
     "breaker_id": 1,
 }
 
+NODE_TYPE_LABELS: dict[str, str] = {
+    "transformer_substation": "ТП",
+    "vru": "ВРУ/ГРЩ",
+    "distribution_board": "ЩС",
+    "group_board": "ГЩ",
+    "load": "Нагрузка",
+}
+
 NODE_DEFAULTS: dict[str, dict] = {
     "transformer_substation": {
-        "label": "ТП 10/0,4 кВ",
+        "label": "ТП",
         "node_type": "transformer_substation",
         "kc": 1.0,
         "cos_phi": 0.95,
@@ -27,14 +35,14 @@ NODE_DEFAULTS: dict[str, dict] = {
         **DEFAULT_TRANSFORMER,
     },
     "vru": {
-        "label": "ВРУ",
+        "label": "ВРУ/ГРЩ",
         "node_type": "vru",
         "kc": 1.0,
         "cos_phi": 0.95,
         "phase": "3",
     },
     "distribution_board": {
-        "label": "РЩ",
+        "label": "ЩС",
         "node_type": "distribution_board",
         "kc": 0.9,
         "cos_phi": 0.95,
@@ -54,6 +62,7 @@ NODE_DEFAULTS: dict[str, dict] = {
         "cos_phi": 0.92,
         "kc": 1.0,
         "phase": "1",
+        "u_nom_v": 230,
     },
 }
 

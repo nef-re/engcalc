@@ -68,14 +68,9 @@ export function CalculatorClient({
         )}
       </header>
 
-      <StandardsPanel
-        standardRef={fetchedStandardRef || standardRef}
-        standards={standards}
-      />
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-5">
-          <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-slate-500">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-4">
+          <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-500">
             Исходные данные
           </h2>
           {schema ? (
@@ -90,8 +85,8 @@ export function CalculatorClient({
           {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
         </div>
 
-        <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-5">
-          <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-slate-500">
+        <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-4">
+          <h2 className="mb-3 text-xs font-medium uppercase tracking-wide text-slate-500">
             Результат
           </h2>
           {output ? (
@@ -103,16 +98,21 @@ export function CalculatorClient({
       </div>
 
       {output?.chart && (
-        <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-5">
+        <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-4">
           <EngineeringChart chart={output.chart} accent={accent} />
         </div>
       )}
 
       {output?.recommendations && Object.keys(output.recommendations).length > 0 && (
-        <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-5">
+        <div className="rounded-xl border border-slate-700/60 bg-slate-900/40 p-4">
           <RecommendationTable recommendations={output.recommendations as Record<string, Record<string, unknown>[]>} />
         </div>
       )}
+
+      <StandardsPanel
+        standardRef={fetchedStandardRef || standardRef}
+        standards={standards}
+      />
     </div>
   );
 }

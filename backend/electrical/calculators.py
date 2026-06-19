@@ -1,6 +1,7 @@
 from typing import Any
 
 from catalog.models import Cable, CircuitBreaker, InstallationCondition
+from catalog.display import cable_display_name
 from calculators.base import BaseCalculator
 from electrical.engine import (
     calc_load,
@@ -115,14 +116,14 @@ class CableSectionCalculator(BaseCalculator):
             "result": {
                 "required_i_a": round(required_i, 2),
                 "selected_section_mm2": selected.section_mm2 if selected else None,
-                "selected_cable": selected.name if selected else None,
+                "selected_cable": cable_display_name(selected) if selected else None,
             },
             "warnings": warnings,
             "recommendations": {
                 "cables": [
                     {
                         "id": c.id,
-                        "name": c.name,
+                        "name": cable_display_name(c),
                         "section_mm2": c.section_mm2,
                         "i_long_a": c.i_long_a,
                         "brand": c.brand.name,
@@ -209,7 +210,7 @@ class VoltageDropCalculator(BaseCalculator):
                 "cables": [
                     {
                         "id": c.id,
-                        "name": c.name,
+                        "name": cable_display_name(c),
                         "section_mm2": c.section_mm2,
                         "i_long_a": c.i_long_a,
                     }

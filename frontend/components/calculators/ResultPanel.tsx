@@ -1,3 +1,5 @@
+import { formatCableResultValue } from "@/lib/cables";
+
 type Props = {
   result: Record<string, unknown>;
   warnings: string[];
@@ -37,17 +39,17 @@ export function ResultPanel({ result, warnings }: Props) {
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-2 sm:grid-cols-2">
         {Object.entries(result).map(([key, value]) => (
           <div
             key={key}
-            className="rounded-lg border border-slate-700/60 bg-slate-800/40 px-4 py-3"
+            className="rounded-lg border border-slate-700/60 bg-slate-800/40 px-3 py-2"
           >
-            <p className="text-xs uppercase tracking-wide text-slate-500">
+            <p className="text-[11px] uppercase tracking-wide text-slate-500">
               {LABELS[key] ?? key}
             </p>
-            <p className="mt-1 text-lg font-semibold text-slate-100">
-              {value === null || value === undefined ? "—" : String(value)}
+            <p className="mt-0.5 text-base font-semibold text-slate-100">
+              {formatCableResultValue(key, value)}
             </p>
           </div>
         ))}

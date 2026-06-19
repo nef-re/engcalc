@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { formButtonCls, formFieldCls, formLabelCls } from "@/lib/forms";
+
 type SchemaProperty = {
   type?: string;
   title?: string;
@@ -60,10 +62,10 @@ export function DynamicForm({ schema, onSubmit, loading }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit} className="space-y-2">
       {Object.entries(props).map(([key, spec]) => (
         <label key={key} className="block">
-          <span className="mb-1 block text-sm font-medium text-slate-300">
+          <span className={formLabelCls}>
             {spec.title ?? key}
             {required.has(key) && <span className="text-amber-400"> *</span>}
           </span>
@@ -71,7 +73,7 @@ export function DynamicForm({ schema, onSubmit, loading }: Props) {
             <select
               value={String(values[key] ?? spec.default ?? "")}
               onChange={(e) => handleChange(key, e.target.value)}
-              className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-100 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              className={formFieldCls}
             >
               {spec.enum.map((opt) => (
                 <option key={String(opt)} value={String(opt)}>
@@ -87,16 +89,12 @@ export function DynamicForm({ schema, onSubmit, loading }: Props) {
               max={spec.maximum}
               value={values[key] === undefined ? "" : String(values[key])}
               onChange={(e) => handleChange(key, e.target.value)}
-              className="w-full rounded-lg border border-slate-600 bg-slate-800/80 px-3 py-2 text-slate-100 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+              className={formFieldCls}
             />
           )}
         </label>
       ))}
-      <button
-        type="submit"
-        disabled={loading}
-        className="w-full rounded-lg bg-sky-600 px-4 py-2.5 font-medium text-white transition hover:bg-sky-500 disabled:opacity-50"
-      >
+      <button type="submit" disabled={loading} className={formButtonCls}>
         {loading ? "Расчёт…" : "Рассчитать"}
       </button>
     </form>

@@ -38,6 +38,7 @@ class Cable(models.Model):
 
     brand = models.ForeignKey(CableBrand, on_delete=models.CASCADE, related_name="cables")
     name = models.CharField("Наименование", max_length=128)
+    construction = models.CharField("Исполнение", max_length=16, default="3x", blank=True)
     section_mm2 = models.FloatField("Сечение, мм²")
     cores = models.PositiveSmallIntegerField("Жил", default=3)
     material = models.CharField("Материал", max_length=8, choices=MATERIAL_CHOICES, default="Cu")
@@ -85,6 +86,13 @@ class CircuitBreaker(models.Model):
     rcd_type = models.CharField("Тип УЗО", max_length=8, blank=True)
     rcd_in_ma = models.PositiveSmallIntegerField("IΔn, мА", null=True, blank=True)
     gost_ref = models.CharField("ГОСТ", max_length=64, blank=True, default="ГОСТ Р 50345-2010")
+    series = models.CharField("Серия", max_length=64, blank=True)
+    category = models.CharField(
+        "Категория",
+        max_length=16,
+        choices=[("household", "Бытовой"), ("industrial", "Промышленный")],
+        default="household",
+    )
 
     class Meta:
         verbose_name = "Автоматический выключатель"

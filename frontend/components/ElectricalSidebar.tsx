@@ -6,7 +6,10 @@ const STEPS = [
   { href: "/electrical/voltage-drop", label: "3. ΔU", slug: "electrical.voltage_drop" },
   { href: "/electrical/short-circuit", label: "4. КЗ", slug: "electrical.short_circuit" },
   { href: "/electrical/breaker-selection", label: "5. Автомат", slug: "electrical.breaker_selection" },
-  { href: "/electrical/system", label: "6. Система МКД", slug: "electrical.system" },
+];
+
+const TOOLS = [
+  { href: "/electrical/catalog", label: "Каталог", slug: "electrical.catalog" },
 ];
 
 export function ElectricalSidebar({ current }: { current?: string }) {
@@ -29,6 +32,30 @@ export function ElectricalSidebar({ current }: { current?: string }) {
           </li>
         ))}
       </ul>
+      <p className="mb-1 mt-4 px-2 text-xs font-medium uppercase text-slate-500">Справочник</p>
+      <ul className="space-y-0.5">
+        {TOOLS.map((tool) => (
+          <li key={tool.href}>
+            <Link
+              href={tool.href}
+              className={`block rounded-md px-2 py-1.5 text-xs transition ${
+                current === tool.slug
+                  ? "bg-sky-500/20 text-sky-300"
+                  : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+              }`}
+            >
+              {tool.label}
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <p className="mb-1 mt-4 px-2 text-xs font-medium uppercase text-slate-500">Кабинет</p>
+      <Link
+        href="/cabinet/system"
+        className="block rounded-md px-2 py-1.5 text-xs text-sky-400/80 hover:bg-sky-950/50 hover:text-sky-300"
+      >
+        6. Система МКД 🔒
+      </Link>
     </div>
   );
 }

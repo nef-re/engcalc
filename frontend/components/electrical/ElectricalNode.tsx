@@ -13,8 +13,8 @@ const COLORS: Record<string, string> = {
 
 const LABELS: Record<string, string> = {
   transformer_substation: "ТП",
-  vru: "ВРУ",
-  distribution_board: "РЩ",
+  vru: "ВРУ/ГРЩ",
+  distribution_board: "ЩС",
   group_board: "ГЩ",
   load: "Нагрузка",
 };
@@ -31,7 +31,23 @@ export type ElectricalNodeData = {
   uk_percent?: number;
   u_secondary_v?: number;
   z_source_mohm?: number;
+  has_violation?: boolean;
 };
+
+const HANDLE_CLASS =
+  "!h-3.5 !w-3.5 !min-h-[14px] !min-w-[14px] !border-2 !border-sky-100 !bg-sky-400 !shadow-[0_0_8px_rgba(56,189,248,0.7)]";
+
+const HANDLE_TARGETS = [
+  { id: "in", position: Position.Left },
+  { id: "in-top", position: Position.Top },
+  { id: "in-bottom", position: Position.Bottom },
+] as const;
+
+const HANDLE_SOURCES = [
+  { id: "out", position: Position.Right },
+  { id: "out-top", position: Position.Top },
+  { id: "out-bottom", position: Position.Bottom },
+] as const;
 
 function ElectricalNode({ data, selected }: NodeProps) {
   const d = data as ElectricalNodeData;
@@ -42,12 +58,13 @@ function ElectricalNode({ data, selected }: NodeProps) {
   return (
     <div
       className={`min-w-[140px] rounded-xl border-2 px-3 py-2 shadow-lg ${color} ${
-        selected ? "ring-2 ring-white/30" : ""
+        d.has_violation ? "ring-2 ring-red-400/80" : selected ? "ring-2 ring-white/30" : ""
       }`}
     >
-      {!isSource && (
-        <Handle type="target" position={Position.Left} className="!bg-slate-400" />
-      )}
+      {!isSource &&
+        HANDLE_TARGETS.map((h) => (
+          <Handle key={h.id} type="target" position={h.position} id={h.id} className={HANDLE_CLASS} />
+        ))}
       <p className="text-[10px] uppercase tracking-wide text-slate-500">
         {LABELS[ntype] || ntype}
       </p>
@@ -64,7 +81,9 @@ function ElectricalNode({ data, selected }: NodeProps) {
       {d.z_source_mohm != null && (
         <p className="text-xs text-rose-300">Z = {d.z_source_mohm} мОм</p>
       )}
-      <Handle type="source" position={Position.Right} className="!bg-slate-400" />
+      {HANDLE_SOURCES.map((h) => (
+        <Handle key={h.id} type="source" position={h.position} id={h.id} className={HANDLE_CLASS} />
+      ))}
     </div>
   );
 }

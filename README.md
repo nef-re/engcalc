@@ -28,7 +28,7 @@ python -m venv .venv
 pip install -r requirements.txt
 set DATABASE_URL=sqlite:///db.sqlite3
 python manage.py migrate
-python manage.py loaddata catalog/fixtures/initial_catalog.json
+python manage.py seed_catalog_full --reset
 python manage.py seed_electrical_data
 python manage.py createsuperuser
 python manage.py runserver
@@ -42,6 +42,17 @@ npm install
 set NEXT_PUBLIC_API_URL=http://localhost:8000
 npm run dev
 ```
+
+## Каталог
+
+Полная база кабелей (по ГОСТ, без производителей) и автоматов (IEK, Dekraft, КЭАЗ, EKF, Контактор):
+
+```bash
+python manage.py seed_catalog_full --reset
+```
+
+- **8** марок кабелей по ГОСТ: ВВГ, ВВГнг-LS, ВВГнг-FRLS, NYM, АВВГ, ВБбШв, АВБбШв, ВВГ-П (маркировка вида «3×2.5»)
+- **1055** автоматов: бытовые MCB + промышленные MCCB
 
 ## Калькуляторы (ЭОМ/ЭС)
 

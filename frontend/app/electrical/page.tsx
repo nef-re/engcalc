@@ -30,9 +30,9 @@ const CALCS = [
     desc: "In, Icu из каталога",
   },
   {
-    href: "/electrical/system",
-    title: "Расчёт системы МКД",
-    desc: "ВРУ → РЩ → ГЩ → нагрузка, схема",
+    href: "/electrical/catalog",
+    title: "Каталог",
+    desc: "Кабели по ГОСТ и аппараты защиты",
   },
 ];
 
@@ -41,7 +41,11 @@ export default function ElectricalHubPage() {
     <AppShell sidebar={<ElectricalSidebar />}>
       <h1 className="text-2xl font-bold text-slate-100">Электрика — ЭОМ / ЭС</h1>
       <p className="mt-2 text-slate-400">
-        Калькуляторы по ходу проектирования: от нагрузки до защиты и КЗ.
+        Калькуляторы в свободном доступе. Сквозной расчёт системы — в{" "}
+        <Link href="/cabinet" className="text-sky-400 hover:underline">
+          личном кабинете
+        </Link>
+        .
       </p>
       <div className="mt-8 grid gap-4 sm:grid-cols-2">
         {CALCS.map((c) => (
@@ -54,6 +58,13 @@ export default function ElectricalHubPage() {
             <p className="mt-1 text-sm text-slate-500">{c.desc}</p>
           </Link>
         ))}
+        <Link
+          href="/cabinet/system"
+          className="rounded-xl border border-sky-500/30 bg-sky-950/20 p-5 transition hover:border-sky-400/50"
+        >
+          <h2 className="font-semibold text-sky-300">Расчёт системы МКД</h2>
+          <p className="mt-1 text-sm text-slate-500">ТП → ВРУ → РЩ → ГЩ — по регистрации</p>
+        </Link>
       </div>
     </AppShell>
   );

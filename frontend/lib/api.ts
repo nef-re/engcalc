@@ -1,3 +1,7 @@
+import { authHeaders } from "@/lib/auth";
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 export type StandardRef = {
   code: string;
   title: string;
@@ -30,6 +34,46 @@ export type CalculateResponse = {
   system?: SystemResult;
 };
 
+export type SystemEdgeResult = {
+  id?: string;
+  from_id?: string;
+  to_id?: string;
+  from: string;
+  to: string;
+  length_m: number;
+  cable: string;
+  cable_id?: number;
+  section_mm2: number;
+  i_a: number;
+  delta_u_percent: number;
+  ik_a: number;
+  ik_ka: number;
+  breaker_ok: boolean;
+  breaker: string | null;
+  breaker_id?: number | null;
+  manual_cable?: boolean;
+  manual_breaker?: boolean;
+  auto_cable?: boolean;
+  auto_breaker?: boolean;
+  ok?: boolean;
+  violations?: string[];
+  phase?: string;
+  u_nom_v?: number;
+};
+
+export type SystemGraphUpdate = {
+  id?: string;
+  source: string;
+  target: string;
+  cable_id?: number | null;
+  breaker_id?: number | null;
+  section_mm2?: number;
+  manual_cable?: boolean;
+  manual_breaker?: boolean;
+  phase?: string;
+  u_nom_v?: number;
+};
+
 export type SystemResult = {
   nodes: Record<string, {
     label: string;
@@ -39,25 +83,11 @@ export type SystemResult = {
     z_source_mohm?: number;
     s_kva?: number;
   }>;
-  edges: Array<{
-    from: string;
-    to: string;
-    length_m: number;
-    cable: string;
-    section_mm2: number;
-    outer_diameter_mm: number;
-    i_a: number;
-    delta_u_percent: number;
-    ik_a: number;
-    ik_ka: number;
-    breaker_ok: boolean;
-    breaker: string | null;
-  }>;
+  edges: SystemEdgeResult[];
   warnings: string[];
+  graph_updates?: SystemGraphUpdate[];
   summary: Record<string, unknown>;
 };
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export async function fetchCalculators(discipline?: string): Promise<CalculatorMeta[]> {
   const url = discipline
@@ -140,7 +170,7 @@ export async function calculateSystem(
 ): Promise<SystemResult> {
   const res = await fetch(`${API_URL}/api/v1/electrical/system/calculate/`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({
       graph_data: graphData,
       u_nom_v: uNomV,
@@ -151,14 +181,143 @@ export async function calculateSystem(
   return res.json();
 }
 
-export async function fetchCables() {
-  const res = await fetch(`${API_URL}/api/v1/catalog/cables/`, { next: { revalidate: 300 } });
+export type SavedSystemMeta = {
+  id: number;
+  name: string;
+  u_nom_v: number;
+  z_source_mohm?: number;
+  updated_at: string;
+  last_result?: SystemResult;
+  graph_data?: { nodes: unknown[]; edges: unknown[] };
+};
+
+export async function fetchSystems(): Promise<SavedSystemMeta[]> {
+  const res = await fetch(`${API_URL}/api/v1/electrical/systems/`, {
+    headers: authHeaders(),
+    cache: "no-store",
+  });
   if (!res.ok) return [];
   return res.json();
 }
 
-export async function fetchBreakers() {
-  const res = await fetch(`${API_URL}/api/v1/catalog/breakers/`, { next: { revalidate: 300 } });
-  if (!res.ok) return [];
+export async function fetchSystem(id: number): Promise<SavedSystemMeta> {
+  const res = await fetch(`${API_URL}/api/v1/electrical/systems/${id}/`, {
+    headers: authHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error("Failed to load system");
   return res.json();
 }
+
+export async function createSystem(payload: {
+  name: string;
+  graph_data: { nodes: unknown[]; edges: unknown[] };
+  u_nom_v: number;
+  z_source_mohm: number;
+}): Promise<SavedSystemMeta & { result: SystemResult }> {
+  const res = await fetch(`${API_URL}/api/v1/electrical/systems/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to save system");
+  return res.json();
+}
+
+export async function updateSystem(
+  id: number,
+  payload: {
+    name?: string;
+    graph_data?: { nodes: unknown[]; edges: unknown[] };
+    u_nom_v?: number;
+    z_source_mohm?: number;
+  }
+): Promise<SavedSystemMeta & { result: SystemResult }> {
+  const res = await fetch(`${API_URL}/api/v1/electrical/systems/${id}/`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to update system");
+  return res.json();
+}
+
+export async function deleteSystem(id: number): Promise<void> {
+  const res = await fetch(`${API_URL}/api/v1/electrical/systems/${id}/`, {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to delete system");
+}
+
+export async function fetchCables(params?: Record<string, string | number>) {
+  const qs = params
+    ? "?" + new URLSearchParams(Object.entries(params).map(([k, v]) => [k, String(v)])).toString()
+    : "";
+  const res = await fetch(`${API_URL}/api/v1/catalog/cables/${qs}`, { cache: "no-store" });
+  if (!res.ok) return [];
+  return res.json() as Promise<CableItem[]>;
+}
+
+export async function fetchCableBrands() {
+  const res = await fetch(`${API_URL}/api/v1/catalog/cables/brands/`, { next: { revalidate: 300 } });
+  if (!res.ok) return [];
+  return res.json() as Promise<Array<{ id: number; name: string; description: string }>>;
+}
+
+export async function fetchBreakers(params?: Record<string, string | number>) {
+  const qs = params ? "?" + new URLSearchParams(
+    Object.entries(params).map(([k, v]) => [k, String(v)])
+  ).toString() : "";
+  const res = await fetch(`${API_URL}/api/v1/catalog/breakers/${qs}`, { cache: "no-store" });
+  if (!res.ok) return [];
+  return res.json() as Promise<BreakerItem[]>;
+}
+
+export async function fetchBreakersMeta() {
+  const res = await fetch(`${API_URL}/api/v1/catalog/breakers/meta/`, { next: { revalidate: 300 } });
+  if (!res.ok) return { manufacturers: [], series: [] };
+  return res.json() as Promise<{ manufacturers: string[]; series: string[] }>;
+}
+
+export type CableItem = {
+  id: number;
+  name: string;
+  brand: string;
+  construction: string;
+  section_mm2: number;
+  cores: number;
+  material: string;
+  u_max_v: number;
+  i_long_a: number;
+  r_mohm_per_m: number;
+  r_20_mohm_per_m: number | null;
+  temp_coeff: number;
+  x_mohm_per_m: number;
+  outer_diameter_mm: number;
+  min_bend_radius_mm: number | null;
+  n_core_section_mm2: number | null;
+  pe_core_section_mm2: number | null;
+  mass_kg_per_m: number | null;
+  gost_ref: string;
+};
+
+export type BreakerItem = {
+  id: number;
+  manufacturer: string;
+  series: string;
+  model_name: string;
+  category: string;
+  breaker_type: string;
+  in_a: number;
+  icu_ka: number;
+  ics_ka: number | null;
+  u_e_v: number;
+  u_imp_kv: number;
+  curve: string;
+  poles: number;
+  has_rcd: boolean;
+  rcd_type: string;
+  rcd_in_ma: number | null;
+  gost_ref: string;
+};

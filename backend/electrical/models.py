@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -11,6 +12,13 @@ class ElectricalSystem(models.Model):
         ("TT", "TT"),
     ]
 
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="electrical_systems",
+        null=True,
+        blank=True,
+    )
     project = models.ForeignKey(
         "projects.Project",
         on_delete=models.CASCADE,

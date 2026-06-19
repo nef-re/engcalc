@@ -1,3 +1,7 @@
+"use client";
+
+import { formatCableMarking } from "@/lib/cables";
+
 type Item = Record<string, unknown>;
 
 type Props = {
@@ -65,7 +69,9 @@ export function RecommendationTable({ recommendations }: Props) {
                     >
                       {cols.map((col) => (
                         <td key={col} className="px-3 py-2 text-slate-200">
-                          {String(item[col] ?? "—")}
+                          {col === "name" && key === "cables"
+                            ? formatCableMarking(String(item[col] ?? "—"))
+                            : String(item[col] ?? "—")}
                         </td>
                       ))}
                     </tr>
