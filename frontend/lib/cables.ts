@@ -40,18 +40,24 @@ export function formatConstructionLabel(construction: string): string {
 
 
 
-export function defaultVoltageForPhase(phase: string): number {
+export const TP_VOLTAGE_OPTIONS = [380, 400] as const;
+export const DEFAULT_TP_VOLTAGE = 400;
 
-  return phase === "1" ? 230 : 400;
-
+/** Линейное напряжение ТП: 380 или 400 В */
+export function normalizeTpLineVoltage(u: number): number {
+  return u >= 390 ? 400 : 380;
 }
 
+/** U для расчёта нагрузки: 3Ф = Uлинии ТП, 1Ф = 230 (400/√3) или 220 (380/√3) */
+export function loadVoltageFromTp(tpLineV: number, phase: string): number {
+  const line = normalizeTpLineVoltage(tpLineV);
+  if (phase === "3") return line;
+  return line >= 390 ? 230 : 220;
+}
 
-
-export function voltageOptionsForPhase(phase: string): number[] {
-
-  return phase === "1" ? [230, 220] : [400, 380];
-
+/** @deprecated используйте loadVoltageFromTp */
+export function defaultVoltageForPhase(phase: string, tpLineV = DEFAULT_TP_VOLTAGE): number {
+  return loadVoltageFromTp(tpLineV, phase);
 }
 
 
@@ -118,18 +124,9 @@ export function allowedConstructionsForSegment(
 
   if (armored) return manual ? ["4x", "5x"] : ["4x"];
 
-  if (srcNodeType === "vru") return manual ? ["4x", "5x"] : ["5x"];
-  if (
-    (srcNodeType === "distribution_board" || srcNodeType === "group_board") &&
-    has1ph &&
-    !has3ph
-  ) {
-    return manual ? ["2x", "3x"] : ["3x"];
-  }
+  if (has3ph) return manual ? ["4x", "5x"] : ["5x"];
 
   if (has1ph && !has3ph) return manual ? ["2x", "3x"] : ["3x"];
-
-  if (has3ph) return manual ? ["4x", "5x"] : ["4x"];
 
   return manual ? ["4x", "5x"] : ["5x"];
 
@@ -193,7 +190,7 @@ export function subtreeLoadNodes(
 
 export function uniqueCableSections<T extends { section_mm2: number }>(cables: T[]): number[] {
 
-  return [...new Set(cables.map((c) => c.section_mm2))].sort((a, b) => a - b);
+  return Array.from(new Set(cables.map((c) => c.section_mm2))).sort((a, b) => a - b);
 
 }
 
@@ -201,7 +198,7 @@ export function uniqueCableSections<T extends { section_mm2: number }>(cables: T
 
 export function uniqueCableCores<T extends { cores: number }>(cables: T[]): number[] {
 
-  return [...new Set(cables.map((c) => c.cores))].sort((a, b) => a - b);
+  return Array.from(new Set(cables.map((c) => c.cores))).sort((a, b) => a - b);
 
 }
 

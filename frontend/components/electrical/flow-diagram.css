@@ -1,4 +1,40 @@
-/* Схема распределительной сети — кабельные линии и точки присоединения */
+/* Схема распределительной сети — системные курсоры ОС и стили линий */
+
+/* Панорама холста */
+.system-flow .react-flow__pane {
+  cursor: grab;
+}
+
+.system-flow .react-flow__pane:active {
+  cursor: grabbing;
+}
+
+.system-flow.is-connecting .react-flow__pane {
+  cursor: crosshair;
+}
+
+.system-flow.is-connecting .react-flow__node {
+  cursor: default;
+}
+
+/* Узлы */
+.system-flow .react-flow__node {
+  cursor: default;
+}
+
+.system-flow .react-flow__node.dragging {
+  cursor: grabbing;
+}
+
+.system-flow .react-flow__node .port-control-btn {
+  cursor: pointer;
+}
+
+/* Кабельные линии */
+.system-flow .react-flow__edge {
+  cursor: pointer;
+}
+
 .system-flow .react-flow__edge-path {
   stroke: #0ea5e9;
   stroke-width: 3.5;
@@ -17,25 +53,80 @@
   stroke-width: 3.5;
 }
 
-.system-flow .react-flow__handle {
+/* Точки подключения */
+.system-flow .react-flow__handle,
+.system-flow .electrical-node-handle {
   width: 14px !important;
   height: 14px !important;
+  min-width: 14px !important;
+  min-height: 14px !important;
   border: 2px solid #e0f2fe !important;
   background: #0ea5e9 !important;
   box-shadow: 0 0 6px rgb(14 165 233 / 0.65);
-  transition: transform 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+  cursor: default;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
 }
 
-.system-flow .react-flow__handle:hover {
+.system-flow .react-flow__handle-left,
+.system-flow .electrical-node-handle.react-flow__handle-left {
+  left: -7px !important;
+  transform: translate(-50%, -50%);
+}
+
+.system-flow .react-flow__handle-right,
+.system-flow .electrical-node-handle.react-flow__handle-right {
+  right: -7px !important;
+  transform: translate(50%, -50%);
+}
+
+.system-flow .react-flow__handle-left:hover,
+.system-flow .electrical-node-handle.react-flow__handle-left:hover {
   background: #38bdf8 !important;
-  transform: scale(1.2);
+  transform: translate(-50%, -50%) scale(1.35);
   box-shadow: 0 0 10px rgb(56 189 248 / 0.85);
 }
 
-.system-flow .react-flow__handle-left {
-  left: -8px !important;
+.system-flow .react-flow__handle-right:hover,
+.system-flow .electrical-node-handle.react-flow__handle-right:hover {
+  background: #38bdf8 !important;
+  transform: translate(50%, -50%) scale(1.35);
+  box-shadow: 0 0 10px rgb(56 189 248 / 0.85);
 }
 
-.system-flow .react-flow__handle-right {
-  right: -8px !important;
+.system-flow .react-flow__handle.connectingfrom,
+.system-flow .react-flow__handle.connectingto {
+  background: #38bdf8 !important;
+  box-shadow: 0 0 12px rgb(56 189 248 / 0.95);
+}
+
+/* Отпайки с ввода ВРУ — левее основного ввода */
+.system-flow .electrical-node-handle-tap.react-flow__handle-left {
+  left: -22px !important;
+  background: #f59e0b !important;
+  border-color: #fef3c7 !important;
+  box-shadow: 0 0 6px rgb(245 158 11 / 0.55);
+}
+
+/* Кнопки +/− на узлах */
+.system-flow .port-control-btn {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  line-height: 1;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.system-flow .port-control-btn > span {
+  display: block;
+  transform: translateY(-0.5px);
+}
+
+/* Элементы управления React Flow */
+.system-flow .react-flow__controls button,
+.system-flow .react-flow__minimap {
+  cursor: pointer;
 }

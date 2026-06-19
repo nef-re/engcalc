@@ -76,12 +76,16 @@ export async function loginUser(
 export async function fetchMe(): Promise<AuthUser | null> {
   const token = getToken();
   if (!token) return null;
-  const res = await fetch(`${API_URL}/api/v1/auth/me/`, {
-    headers: authHeaders(),
-  });
-  if (!res.ok) {
-    clearAuth();
+  try {
+    const res = await fetch(`${API_URL}/api/v1/auth/me/`, {
+      headers: authHeaders(),
+    });
+    if (!res.ok) {
+      clearAuth();
+      return null;
+    }
+    return res.json();
+  } catch {
     return null;
   }
-  return res.json();
 }

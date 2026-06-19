@@ -5,9 +5,16 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from catalog.models import Cable, CircuitBreaker, Transformer
+from catalog.models import Cable, CircuitBreaker
 from catalog.display import cable_display_name
-from electrical.defaults import NODE_TYPE_LABELS, calc_transformer_z_mohm, get_system_defaults
+from electrical.defaults import (
+    NODE_TYPE_LABELS,
+    calc_transformer_z_mohm,
+    resolve_tp_electrical,
+    tp_output_ports,
+    get_system_defaults,
+    load_voltage_from_tp,
+)
 from electrical.selection import (
     allowed_constructions,
     edge_electrical_params,
@@ -15,15 +22,31 @@ from electrical.selection import (
     line_z_mohm,
     normalize_edge_directions,
     parallel_edge_groups,
-    select_breaker_optimal,
+    select_breaker_for_line,
     select_cable_optimal,
     subtree_load_nodes,
     validate_breaker,
     validate_cable,
+    NODE_TYPE_RANK,
+)
+from electrical.vru import (
+    handle_section_index,
+    is_tap_handle,
+    vru_active_sections,
+    vru_per_section_inputs,
+    vru_ports,
+    vru_sections_merged,
 )
 from electrical.engine import calc_load, calc_short_circuit, calc_voltage_drop
 
 DELTA_U_LIMIT = 5.0
+
+INPUT_BREAKER_NODE_TYPES = (
+    "group_board",
+    "distribution_board",
+    "vru",
+    "transformer_substation",
+)
 
 
 def _node_map(nodes: list[dict]) -> dict[str, dict]:
@@ -71,7 +94,96 @@ def _get_cable(cable_id: int | None, section_mm2: float | None) -> Cable | None:
     return None
 
 
-def _aggregate_loads(nodes: list[dict], edges: list[dict]) -> dict[str, dict]:
+def _sum_child_loads(child_data: list[dict], cos_phi: float, kc: float, u_line: float) -> dict:
+    if not child_data:
+        return {"p_kw": 0, "i_a": 0, "cos_phi": cos_phi, "phase": "3"}
+    total_p = sum(c["p_kw"] for c in child_data)
+    has_3ph = any(c["phase"] == "3" for c in child_data)
+    has_1ph = any(c["phase"] == "1" for c in child_data)
+    if has_3ph and not has_1ph:
+        res = calc_load(total_p, cos_phi, kc, "3", u_nom_v=u_line)
+        return {"p_kw": res.p_kw, "i_a": res.i_a, "cos_phi": cos_phi, "phase": "3"}
+    if has_1ph and not has_3ph:
+        total_i = sum(c["i_a"] for c in child_data) * kc
+        return {"p_kw": total_p * kc, "i_a": total_i, "cos_phi": cos_phi, "phase": "1"}
+    res = calc_load(total_p, cos_phi, kc, "3", u_nom_v=u_line)
+    return {"p_kw": res.p_kw, "i_a": res.i_a, "cos_phi": cos_phi, "phase": "3"}
+
+
+def _aggregate_vru_node(
+    nid: str,
+    node: dict,
+    edges: list[dict],
+    loads: dict,
+    visit,
+    u_line: float,
+) -> dict:
+    cos_phi = float(node.get("cos_phi", 0.95))
+    kc = float(node.get("kc", 1.0))
+    active = vru_active_sections(node)
+    merged = vru_sections_merged(node)
+    outgoing = [e for e in edges if e["from"] == nid]
+
+    section_children: dict[int, list[dict]] = {0: [], 1: []}
+    tap_children: dict[int, list[dict]] = {0: [], 1: []}
+    for e in outgoing:
+        sh = e.get("source_handle") or "out-0"
+        sec = handle_section_index(sh)
+        if sec not in active:
+            continue
+        if is_tap_handle(sh):
+            tap_children.setdefault(sec, []).append(visit(e["to"]))
+        else:
+            section_children.setdefault(sec, []).append(visit(e["to"]))
+
+    vru_sections: list[dict] = []
+    for sec in (0, 1):
+        is_active = sec in active
+        if not is_active:
+            vru_sections.append(
+                {"section": sec, "label": f"С-{sec + 1}", "p_kw": 0, "i_a": 0, "active": False}
+            )
+            continue
+        agg = _sum_child_loads(section_children.get(sec, []), cos_phi, kc, u_line)
+        tap_agg = _sum_child_loads(tap_children.get(sec, []), cos_phi, kc, u_line)
+        sec_i = agg["i_a"] + tap_agg["i_a"]
+        sec_p = agg["p_kw"] + tap_agg["p_kw"]
+        vru_sections.append(
+            {
+                "section": sec,
+                "label": f"С-{sec + 1}",
+                "p_kw": round(sec_p, 2),
+                "i_a": round(sec_i, 2),
+                "tap_i_a": round(tap_agg["i_a"], 2),
+                "active": True,
+            }
+        )
+
+    active_sections = [s for s in vru_sections if s.get("active")]
+    if merged and len(active_sections) > 1:
+        all_children = [
+            c
+            for sec in active
+            for c in section_children.get(sec, []) + tap_children.get(sec, [])
+        ]
+        combined = _sum_child_loads(all_children, cos_phi, kc, u_line)
+        total_p, total_i = combined["p_kw"], combined["i_a"]
+    else:
+        total_p = sum(s["p_kw"] for s in active_sections)
+        total_i = sum(s["i_a"] for s in active_sections)
+
+    loads[nid] = {
+        "p_kw": round(total_p, 2),
+        "i_a": round(total_i, 2),
+        "cos_phi": cos_phi,
+        "phase": "3",
+        "vru_sections": vru_sections,
+        "vru_merged": merged,
+    }
+    return loads[nid]
+
+
+def _aggregate_loads(nodes: list[dict], edges: list[dict], u_line: float) -> dict[str, dict]:
     """Снизу вверх: суммирование нагрузок по узлам (от нагрузок к ТП)."""
     nm = _node_map(nodes)
     children = _children_map(edges)
@@ -88,7 +200,7 @@ def _aggregate_loads(nodes: list[dict], edges: list[dict]) -> dict[str, dict]:
             cos_phi = float(node.get("cos_phi", 0.95))
             kc = float(node.get("kc", 1.0))
             phase = node.get("phase", "1")
-            u = float(node.get("u_nom_v") or (230 if phase == "1" else 400))
+            u = load_voltage_from_tp(u_line, phase)
             res = calc_load(p, cos_phi, kc, phase, u_nom_v=u)
             loads[nid] = {
                 "p_kw": res.p_kw,
@@ -97,6 +209,9 @@ def _aggregate_loads(nodes: list[dict], edges: list[dict]) -> dict[str, dict]:
                 "phase": phase,
             }
             return loads[nid]
+
+        if ntype == "vru":
+            return _aggregate_vru_node(nid, node, edges, loads, visit, u_line)
 
         child_ids = children.get(nid, [])
         if not child_ids:
@@ -112,7 +227,7 @@ def _aggregate_loads(nodes: list[dict], edges: list[dict]) -> dict[str, dict]:
         has_1ph = any(c["phase"] == "1" for c in child_data)
 
         if has_3ph and not has_1ph:
-            res = calc_load(total_p, cos_phi, kc, "3", u_nom_v=400)
+            res = calc_load(total_p, cos_phi, kc, "3", u_nom_v=u_line)
             loads[nid] = {
                 "p_kw": res.p_kw,
                 "i_a": res.i_a,
@@ -128,7 +243,7 @@ def _aggregate_loads(nodes: list[dict], edges: list[dict]) -> dict[str, dict]:
                 "phase": "1",
             }
         else:
-            res = calc_load(total_p, cos_phi, kc, "3", u_nom_v=400)
+            res = calc_load(total_p, cos_phi, kc, "3", u_nom_v=u_line)
             loads[nid] = {
                 "p_kw": res.p_kw,
                 "i_a": res.i_a,
@@ -164,7 +279,17 @@ def _normalize_graph(graph_data: dict[str, Any]) -> tuple[list[dict], list[dict]
             "u_secondary_v": data.get("u_secondary_v", n.get("u_secondary_v")),
             "u_primary_kv": data.get("u_primary_kv", n.get("u_primary_kv")),
             "transformer_id": data.get("transformer_id", n.get("transformer_id")),
+            "transformer_count": data.get("transformer_count", n.get("transformer_count", 1)),
             "z_source_mohm": data.get("z_source_mohm", n.get("z_source_mohm")),
+            "input_ports": data.get("input_ports", n.get("input_ports", [])),
+            "output_ports": data.get("output_ports", n.get("output_ports", [])),
+            "breaker_id": data.get("breaker_id", n.get("breaker_id")),
+            "manual_breaker": bool(data.get("manual_breaker", n.get("manual_breaker", False))),
+            "vru_scheme": data.get("vru_scheme", n.get("vru_scheme", "1in_2out")),
+            "vru_section_switch": data.get("vru_section_switch", n.get("vru_section_switch", "open")),
+            "vru_operating_mode": data.get("vru_operating_mode", n.get("vru_operating_mode", "normal")),
+            "vru_tap_in0": bool(data.get("vru_tap_in0", n.get("vru_tap_in0", False))),
+            "vru_tap_in1": bool(data.get("vru_tap_in1", n.get("vru_tap_in1", False))),
         })
 
     edges = []
@@ -180,38 +305,20 @@ def _normalize_graph(graph_data: dict[str, Any]) -> tuple[list[dict], list[dict]
             "breaker_id": data.get("breaker_id", e.get("breaker_id")),
             "manual_cable": bool(data.get("manual_cable", False)),
             "manual_breaker": bool(data.get("manual_breaker", False)),
+            "source_handle": e.get("sourceHandle", e.get("source_handle")),
+            "target_handle": e.get("targetHandle", e.get("target_handle")),
         })
 
     return nodes, edges
 
 
 def _resolve_source_params(nodes: list[dict], u_nom_v: float, z_source_mohm: float) -> tuple[float, float]:
-    """Если на схеме есть ТП — берём U и Z из неё (или из каталога)."""
+    """Если на схеме есть ТП — берём U и Z из неё (каталог или ручной ввод)."""
     for n in nodes:
         if n.get("node_type") != "transformer_substation":
             continue
-
-        s_kva = float(n.get("s_kva") or 630)
-        uk = float(n.get("uk_percent") or 6)
-        u2 = float(n.get("u_secondary_v") or 400)
-
-        tid = n.get("transformer_id")
-        if tid:
-            try:
-                tr = Transformer.objects.get(pk=tid)
-                s_kva = tr.s_kva
-                uk = tr.uk_percent
-                u2 = tr.u_secondary_v
-            except Transformer.DoesNotExist:
-                pass
-
-        z_manual = n.get("z_source_mohm")
-        if z_manual is not None:
-            z = float(z_manual)
-        else:
-            z = calc_transformer_z_mohm(s_kva, uk, u2)
-
-        return u2, z
+        tp = resolve_tp_electrical(n)
+        return float(tp["u_secondary_v"]), float(tp["z_mohm"])
 
     return u_nom_v, z_source_mohm
 
@@ -241,7 +348,7 @@ def calculate_system(
 
     u_nom_v, z_source_mohm = _resolve_source_params(nodes, u_nom_v, z_source_mohm)
 
-    loads = _aggregate_loads(nodes, edges)
+    loads = _aggregate_loads(nodes, edges, u_nom_v)
     nm = _node_map(nodes)
     children = _children_map(edges)
     parallel_groups = parallel_edge_groups(edges)
@@ -393,7 +500,7 @@ def calculate_system(
                 st["phase"],
             ).ik_a / 1000
 
-    # --- Проход 2: автоматы с селективностью (от нагрузок к ТП) ---
+    # --- Проход 2: автоматы на отходах к нагрузкам (защита кабельной линии) ---
     breaker_by_edge: dict[str, CircuitBreaker | None] = {}
 
     for edge in reversed(edge_order):
@@ -402,14 +509,12 @@ def calculate_system(
             continue
         edge = st["edge"]
         dst = st["dst"]
+        dst_type = nm.get(dst, {}).get("node_type", "load")
         manual_breaker = edge.get("manual_breaker", False)
 
-        downstream_ins = [
-            breaker_by_edge[e["id"]].in_a
-            for e in edges
-            if e["from"] == dst and e["id"] in breaker_by_edge and breaker_by_edge[e["id"]]
-        ]
-        max_downstream_in = max(downstream_ins) if downstream_ins else 0.0
+        if dst_type != "load":
+            breaker_by_edge[edge["id"]] = None
+            continue
 
         breaker: CircuitBreaker | None = None
         if manual_breaker and edge.get("breaker_id"):
@@ -417,23 +522,169 @@ def calculate_system(
                 breaker = CircuitBreaker.objects.get(pk=edge["breaker_id"])
             except CircuitBreaker.DoesNotExist:
                 breaker = None
-        if not breaker:
-            breaker = select_breaker_optimal(
+        elif not manual_breaker:
+            breaker, _ = select_breaker_for_line(
                 st["current_a"],
                 st["ik_ka"],
                 st["phase"],
-                max_downstream_in=max_downstream_in,
+                cable_i_long_a=float(st["cable"].i_long_a),
+                max_downstream_in=0,
             )
-        if not breaker and edge.get("breaker_id"):
-            try:
-                breaker = CircuitBreaker.objects.get(pk=edge["breaker_id"])
-            except CircuitBreaker.DoesNotExist:
-                pass
 
         if breaker and not manual_breaker:
             edge["breaker_id"] = breaker.id
 
         breaker_by_edge[edge["id"]] = breaker
+
+    # --- Проход 3: вводные автоматы на узлах (ЩС, ВРУ, ТП) по суммарному току ---
+    breaker_by_node: dict[str, CircuitBreaker | None] = {}
+    selectivity_by_node: dict[str, bool] = {}
+
+    board_nodes = sorted(
+        [n for n in nodes if n.get("node_type") in INPUT_BREAKER_NODE_TYPES],
+        key=lambda n: NODE_TYPE_RANK.get(n.get("node_type", ""), 50),
+        reverse=True,
+    )
+
+    vru_section_breakers_by_node: dict[str, list[dict]] = {}
+
+    for node in board_nodes:
+        nid = node["id"]
+        ntype = node.get("node_type", "")
+        load = loads.get(nid, {})
+        current_a = float(load.get("i_a", 0))
+        phase = load.get("phase", "3")
+        manual_breaker = bool(node.get("manual_breaker", False))
+
+        incoming = [e for e in edges if e["to"] == nid]
+
+        def _incoming_ik_cable(inc_list: list[dict]) -> tuple[float, float]:
+            inc_states = [edge_state[e["id"]] for e in inc_list if e["id"] in edge_state]
+            if inc_states:
+                return (
+                    max(st["ik_ka"] for st in inc_states),
+                    min(float(st["cable"].i_long_a) for st in inc_states),
+                )
+            ik = calc_short_circuit(
+                u_nom_v, z_at_node.get(nid, z_source_mohm), 0, 0, 0, phase
+            ).ik_a / 1000
+            return ik, 0.0
+
+        def _downstream_in(section: int | None = None) -> float:
+            downstream_ins: list[float] = []
+            for e in edges:
+                if e["from"] != nid:
+                    continue
+                sh = e.get("source_handle") or "out-0"
+                if section is not None and handle_section_index(sh) != section:
+                    continue
+                eb = breaker_by_edge.get(e["id"])
+                if eb:
+                    downstream_ins.append(float(eb.in_a))
+                child = e["to"]
+                nb = breaker_by_node.get(child)
+                if nb:
+                    downstream_ins.append(float(nb.in_a))
+            return max(downstream_ins) if downstream_ins else 0.0
+
+        ik_ka, cable_i_long = _incoming_ik_cable(incoming)
+        max_downstream_in = _downstream_in()
+
+        if ntype == "vru" and vru_per_section_inputs(node):
+            vru_secs = load.get("vru_sections", [])
+            section_breakers: list[dict] = []
+            primary_breaker: CircuitBreaker | None = None
+            for sec_info in vru_secs:
+                if not sec_info.get("active"):
+                    continue
+                sec_idx = int(sec_info["section"])
+                sec_i = float(sec_info["i_a"])
+                inc_sec = [
+                    e for e in incoming if handle_section_index(e.get("target_handle")) == sec_idx
+                ]
+                sec_ik, sec_cable = _incoming_ik_cable(inc_sec)
+                sec_max_down = _downstream_in(sec_idx)
+                sec_breaker: CircuitBreaker | None = None
+                sec_sel = True
+                if sec_i > 0:
+                    sec_breaker, sec_sel = select_breaker_for_line(
+                        sec_i,
+                        sec_ik,
+                        phase,
+                        cable_i_long_a=sec_cable,
+                        max_downstream_in=sec_max_down,
+                    )
+                if sec_breaker and primary_breaker is None:
+                    primary_breaker = sec_breaker
+                section_breakers.append(
+                    {
+                        "section": sec_idx,
+                        "label": sec_info.get("label", f"С-{sec_idx + 1}"),
+                        "i_a": round(sec_i, 2),
+                        "breaker_id": sec_breaker.id if sec_breaker else None,
+                        "breaker_in_a": sec_breaker.in_a if sec_breaker else None,
+                        "breaker": (
+                            f"{sec_breaker.manufacturer} {sec_breaker.model_name}"
+                            if sec_breaker
+                            else None
+                        ),
+                        "selectivity_ok": sec_sel,
+                    }
+                )
+                if sec_breaker and not sec_sel:
+                    warnings.append(
+                        f"ВРУ {_node_display_label(nodes, nid)}, {sec_info.get('label')}: см. селективность"
+                    )
+            vru_section_breakers_by_node[nid] = section_breakers
+            breaker_by_node[nid] = primary_breaker
+            selectivity_by_node[nid] = all(
+                sb.get("selectivity_ok", True) for sb in section_breakers
+            )
+            continue
+
+        breaker: CircuitBreaker | None = None
+        selectivity_ok = True
+        if manual_breaker and node.get("breaker_id"):
+            try:
+                breaker = CircuitBreaker.objects.get(pk=node["breaker_id"])
+                selectivity_ok = (
+                    max_downstream_in <= 0 or float(breaker.in_a) > max_downstream_in
+                )
+            except CircuitBreaker.DoesNotExist:
+                breaker = None
+        elif not manual_breaker and current_a > 0:
+            breaker, selectivity_ok = select_breaker_for_line(
+                current_a,
+                ik_ka,
+                phase,
+                cable_i_long_a=cable_i_long,
+                max_downstream_in=max_downstream_in,
+            )
+            if breaker:
+                node["breaker_id"] = breaker.id
+
+        breaker_by_node[nid] = breaker
+        selectivity_by_node[nid] = selectivity_ok
+
+        if ntype == "vru":
+            vru_secs = load.get("vru_sections", [])
+            vru_section_breakers_by_node[nid] = [
+                {
+                    "section": s["section"],
+                    "label": s.get("label", f"С-{s['section'] + 1}"),
+                    "i_a": s.get("i_a", 0),
+                    "breaker_id": breaker.id if breaker else None,
+                    "breaker_in_a": breaker.in_a if breaker else None,
+                    "breaker": f"{breaker.manufacturer} {breaker.model_name}" if breaker else None,
+                    "selectivity_ok": selectivity_ok,
+                }
+                for s in vru_secs
+                if s.get("active")
+            ]
+
+        if breaker and not selectivity_ok:
+            label = _node_display_label(nodes, nid)
+            warnings.append(f"Узел {label}: см. селективность")
 
     # --- Сборка результатов ---
     for edge in edge_order:
@@ -444,13 +695,7 @@ def calculate_system(
         cable = st["cable"]
         breaker = breaker_by_edge.get(edge["id"])
         dst = st["dst"]
-
-        downstream_ins = [
-            breaker_by_edge[e["id"]].in_a
-            for e in edges
-            if e["from"] == dst and e["id"] in breaker_by_edge and breaker_by_edge[e["id"]]
-        ]
-        max_downstream_in = max(downstream_ins) if downstream_ins else 0.0
+        dst_type = nm.get(dst, {}).get("node_type", "load")
 
         min_section = max(
             (
@@ -474,12 +719,19 @@ def calculate_system(
                 min_section_mm2=min_section,
             )
         )
-        if breaker:
-            violations.extend(
-                validate_breaker(breaker, st["current_a"], st["ik_ka"], max_downstream_in)
-            )
-        else:
-            violations.append("Автомат не подобран")
+        if dst_type == "load":
+            if breaker:
+                violations.extend(
+                    validate_breaker(
+                        breaker,
+                        st["current_a"],
+                        st["ik_ka"],
+                        0,
+                        cable_i_long_a=float(cable.i_long_a),
+                    )
+                )
+            else:
+                violations.append("Автомат не подобран")
 
         for issue in violations:
             warnings.append(f"Участок {st['seg']}: {issue}")
@@ -498,6 +750,8 @@ def calculate_system(
             "constructions": st["constructions"],
         })
 
+        display_breaker = breaker if dst_type == "load" else breaker_by_node.get(dst)
+
         edge_results.append({
             "id": edge.get("id"),
             "from_id": st["src"],
@@ -515,9 +769,16 @@ def calculate_system(
             "ik_a": round(st["ik_ka"] * 1000, 1),
             "ik_ka": round(st["ik_ka"], 3),
             "breaker_ok": len(violations) == 0,
-            "breaker": f"{breaker.manufacturer} {breaker.model_name}" if breaker else None,
-            "breaker_in_a": breaker.in_a if breaker else None,
-            "breaker_id": breaker.id if breaker else None,
+            "breaker": (
+                f"{display_breaker.manufacturer} {display_breaker.model_name}"
+                if display_breaker
+                else None
+            ),
+            "breaker_in_a": display_breaker.in_a if display_breaker else None,
+            "breaker_id": display_breaker.id if display_breaker else None,
+            "breaker_placement": (
+                "feeder" if dst_type == "load" and breaker else "input" if display_breaker else None
+            ),
             "manual_cable": st["manual_cable"],
             "manual_breaker": edge.get("manual_breaker", False),
             "auto_cable": not st["manual_cable"],
@@ -529,6 +790,8 @@ def calculate_system(
             "constructions": st["constructions"],
         })
 
+    node_graph_updates: list[dict] = []
+
     for nid, load in loads.items():
         node = _node_map(nodes)[nid]
         nr = {
@@ -538,15 +801,91 @@ def calculate_system(
             "i_a": round(load["i_a"], 2),
         }
         if node.get("node_type") == "transformer_substation":
-            nr["z_source_mohm"] = z_source_mohm
-            nr["s_kva"] = node.get("s_kva")
+            tp = resolve_tp_electrical(node)
+            nr["z_source_mohm"] = tp["z_mohm"]
+            nr["s_kva"] = tp["s_kva"]
+            nr["transformer_count"] = tp["transformer_count"]
+            count = int(tp["transformer_count"])
+            if count > 1:
+                nr["s_kva_total"] = round(float(tp["s_kva"]) * count, 1)
+        if node.get("node_type") == "vru":
+            nr["vru_sections"] = load.get("vru_sections", [])
+            nr["vru_merged"] = load.get("vru_merged", False)
+            nr["vru_section_breakers"] = vru_section_breakers_by_node.get(nid, [])
+        nb = breaker_by_node.get(nid)
+        if nb:
+            nr["breaker_id"] = nb.id
+            nr["breaker_in_a"] = nb.in_a
+            nr["breaker"] = f"{nb.manufacturer} {nb.model_name}"
+            nr["selectivity_ok"] = selectivity_by_node.get(nid, True)
+            graph_upd: dict[str, Any] = {
+                "id": nid,
+                "breaker_id": nb.id,
+                "breaker_in_a": nb.in_a,
+                "selectivity_ok": selectivity_by_node.get(nid, True),
+            }
+            if node.get("node_type") == "vru":
+                graph_upd["vru_sections"] = load.get("vru_sections", [])
+                graph_upd["vru_section_breakers"] = vru_section_breakers_by_node.get(nid, [])
+            node_graph_updates.append(graph_upd)
+        elif nid in breaker_by_node:
+            nr["selectivity_ok"] = True
         node_results[nid] = nr
+
+    breaker_results: list[dict] = []
+    board_nodes_display = sorted(
+        [n for n in nodes if n.get("node_type") in INPUT_BREAKER_NODE_TYPES],
+        key=lambda n: NODE_TYPE_RANK.get(n.get("node_type", ""), 50),
+    )
+    for node in board_nodes_display:
+        nid = node["id"]
+        b = breaker_by_node.get(nid)
+        if not b:
+            continue
+        load = loads.get(nid, {})
+        breaker_results.append({
+            "id": f"node-{nid}",
+            "placement": "input",
+            "location": _node_display_label(nodes, nid),
+            "node_id": nid,
+            "breaker": f"{b.manufacturer} {b.model_name}",
+            "breaker_in_a": b.in_a,
+            "breaker_id": b.id,
+            "i_a": round(float(load.get("i_a", 0)), 2),
+            "selectivity_ok": selectivity_by_node.get(nid, True),
+        })
+
+    for edge in edge_order:
+        st = edge_state.get(edge["id"])
+        if not st:
+            continue
+        if nm.get(st["dst"], {}).get("node_type") != "load":
+            continue
+        b = breaker_by_edge.get(edge["id"])
+        if not b:
+            continue
+        breaker_results.append({
+            "id": f"edge-{edge['id']}",
+            "placement": "feeder",
+            "location": (
+                f"{_node_display_label(nodes, st['src'])} → "
+                f"{_node_display_label(nodes, st['dst'])}"
+            ),
+            "edge_id": edge.get("id"),
+            "breaker": f"{b.manufacturer} {b.model_name}",
+            "breaker_in_a": b.in_a,
+            "breaker_id": b.id,
+            "i_a": round(st["total_i"], 2),
+            "selectivity_ok": True,
+        })
 
     return {
         "nodes": node_results,
         "edges": edge_results,
+        "breakers": breaker_results,
         "warnings": warnings,
         "graph_updates": graph_updates,
+        "node_graph_updates": node_graph_updates,
         "summary": {
             "total_nodes": len(nodes),
             "total_edges": len(edges),
@@ -591,11 +930,12 @@ def default_mkd_template() -> dict[str, Any]:
     """Шаблон МКД: ТП → ВРУ → ЩС → нагрузка."""
     defs = get_system_defaults()
     tp = defs["node_defaults"]["transformer_substation"]
+    vru_def = defs["node_defaults"]["vru"]
+    vru_in, vru_out = vru_ports(vru_def.get("vru_scheme", "1in_2out"))
 
     c16 = _find_armored_cable_id(16, construction="4x")
     c10 = _find_cable_id(10, construction="5x")
     c25 = _find_cable_id(2.5, construction="3x")
-    b63 = _find_breaker_id("IEK", 63, 3)
     b16 = _find_breaker_id("IEK", 16, 1)
 
     return {
@@ -604,18 +944,22 @@ def default_mkd_template() -> dict[str, Any]:
                 "id": "tp1",
                 "type": "custom",
                 "position": {"x": -120, "y": 200},
-                "data": {**tp, "label": "ТП"},
+                "data": {
+                    **tp,
+                    "label": "ТП",
+                    "output_ports": tp_output_ports(tp.get("transformer_count", 1)),
+                    "input_ports": [],
+                },
             },
             {
                 "id": "vru",
                 "type": "custom",
                 "position": {"x": 150, "y": 200},
                 "data": {
-                    "label": "ВРУ/ГРЩ",
-                    "node_type": "vru",
-                    "kc": 1.0,
-                    "cos_phi": 0.95,
-                    "phase": "3",
+                    **vru_def,
+                    "label": "ВРУ",
+                    "input_ports": vru_in,
+                    "output_ports": vru_out,
                 },
             },
             {
@@ -628,6 +972,8 @@ def default_mkd_template() -> dict[str, Any]:
                     "kc": 0.9,
                     "cos_phi": 0.95,
                     "phase": "3",
+                    "input_ports": [{"id": "in-0"}],
+                    "output_ports": [{"id": "out-0"}],
                 },
             },
             {
@@ -641,7 +987,8 @@ def default_mkd_template() -> dict[str, Any]:
                     "cos_phi": 0.92,
                     "kc": 1.0,
                     "phase": "1",
-                    "u_nom_v": 230,
+                    "input_ports": [{"id": "in-0"}],
+                    "output_ports": [],
                 },
             },
         ],
@@ -650,18 +997,24 @@ def default_mkd_template() -> dict[str, Any]:
                 "id": "e-tp-vru",
                 "source": "tp1",
                 "target": "vru",
-                "data": {"length_m": 5, "cable_id": c16, "section_mm2": 16, "breaker_id": b63},
+                "sourceHandle": "out-0",
+                "targetHandle": "in-0",
+                "data": {"length_m": 5, "cable_id": c16, "section_mm2": 16},
             },
             {
                 "id": "e-vru-rs1",
                 "source": "vru",
                 "target": "rs1",
-                "data": {"length_m": 15, "cable_id": c10, "section_mm2": 10, "breaker_id": b63},
+                "sourceHandle": "out-0",
+                "targetHandle": "in-0",
+                "data": {"length_m": 15, "cable_id": c10, "section_mm2": 10},
             },
             {
                 "id": "e-rs1-load1",
                 "source": "rs1",
                 "target": "load1",
+                "sourceHandle": "out-0",
+                "targetHandle": "in-0",
                 "data": {"length_m": 25, "cable_id": c25, "section_mm2": 2.5, "breaker_id": b16},
             },
         ],

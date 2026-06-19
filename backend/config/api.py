@@ -383,7 +383,22 @@ def system_defaults(request: HttpRequest):
 
 
 @api.get("/catalog/transformers/")
-def catalog_transformers(request: HttpRequest):
+def catalog_transformers(
+    request: HttpRequest,
+    u_primary_kv: float | None = None,
+    u_secondary_v: float | None = None,
+    s_kva_min: float | None = None,
+    s_kva_max: float | None = None,
+):
+    qs = Transformer.objects.all()
+    if u_primary_kv is not None:
+        qs = qs.filter(u_primary_kv=u_primary_kv)
+    if u_secondary_v is not None:
+        qs = qs.filter(u_secondary_v=u_secondary_v)
+    if s_kva_min is not None:
+        qs = qs.filter(s_kva__gte=s_kva_min)
+    if s_kva_max is not None:
+        qs = qs.filter(s_kva__lte=s_kva_max)
     return [
         {
             "id": t.id,
@@ -393,7 +408,7 @@ def catalog_transformers(request: HttpRequest):
             "u_secondary_v": t.u_secondary_v,
             "uk_percent": t.uk_percent,
         }
-        for t in Transformer.objects.all()
+        for t in qs
     ]
 
 

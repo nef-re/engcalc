@@ -2,7 +2,8 @@ from django.core.management.base import BaseCommand
 
 from catalog.data.breaker_catalog import generate_breakers
 from catalog.data.cable_specs import CABLE_BRANDS, generate_cables
-from catalog.models import Cable, CableBrand, CircuitBreaker, InstallationCondition
+from catalog.data.transformer_catalog import generate_transformers
+from catalog.models import Cable, CableBrand, CircuitBreaker, InstallationCondition, Transformer
 
 
 class Command(BaseCommand):
@@ -12,7 +13,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--reset",
             action="store_true",
-            help="Удалить существующие кабели и автоматы перед загрузкой",
+            help="Удалить существующие кабели, автоматы и трансформаторы перед загрузкой",
         )
 
     def handle(self, *args, **options):
@@ -21,6 +22,7 @@ class Command(BaseCommand):
             Cable.objects.all().delete()
             CircuitBreaker.objects.all().delete()
             CableBrand.objects.all().delete()
+            Transformer.objects.all().delete()
 
         # Марки кабелей
         allowed_brands = {spec["name"] for spec in CABLE_BRANDS}
@@ -113,9 +115,26 @@ class Command(BaseCommand):
             if created:
                 created_breakers += 1
 
+        # Трансформаторы 6/0,4 и 10/0,4 кВ
+        transformer_items = generate_transformers()
+        created_transformers = 0
+        for item in transformer_items:
+            _, created = Transformer.objects.update_or_create(
+                name=item["name"],
+                defaults={
+                    "s_kva": item["s_kva"],
+                    "u_primary_kv": item["u_primary_kv"],
+                    "u_secondary_v": item["u_secondary_v"],
+                    "uk_percent": item["uk_percent"],
+                },
+            )
+            if created:
+                created_transformers += 1
+
         self.stdout.write(self.style.SUCCESS(
             f"Каталог загружен: марок {len(brand_map)}, кабелей {Cable.objects.count()} "
             f"(+{created_cables} новых), автоматов {CircuitBreaker.objects.count()} "
-            f"(+{created_breakers} новых). "
+            f"(+{created_breakers} новых), трансформаторов {Transformer.objects.count()} "
+            f"(+{created_transformers} новых). "
             f"Удалено устаревших: кабелей {removed_orphans[0]}, марок {removed_brands[0]}"
         ))

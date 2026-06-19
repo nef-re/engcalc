@@ -36,11 +36,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const stored = getStoredUser();
     if (stored) setUser(stored);
-    fetchMe().then((u) => {
-      if (u) setUser(u);
-      else if (!stored) setUser(null);
-      setLoading(false);
-    });
+    fetchMe()
+      .then((u) => {
+        if (u) setUser(u);
+        else if (!stored) setUser(null);
+      })
+      .catch(() => {
+        /* API недоступен — оставляем сохранённого пользователя или гостя */
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const login = useCallback(async (username: string, password: string) => {

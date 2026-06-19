@@ -74,6 +74,26 @@ export type SystemGraphUpdate = {
   u_nom_v?: number;
 };
 
+export type SystemNodeGraphUpdate = {
+  id: string;
+  breaker_id?: number | null;
+  breaker_in_a?: number;
+  selectivity_ok?: boolean;
+};
+
+export type SystemBreakerResult = {
+  id: string;
+  placement: "input" | "feeder";
+  location: string;
+  breaker: string;
+  breaker_in_a: number;
+  breaker_id: number;
+  i_a: number;
+  selectivity_ok?: boolean;
+  node_id?: string;
+  edge_id?: string;
+};
+
 export type SystemResult = {
   nodes: Record<string, {
     label: string;
@@ -82,10 +102,16 @@ export type SystemResult = {
     i_a: number;
     z_source_mohm?: number;
     s_kva?: number;
+    breaker_id?: number;
+    breaker_in_a?: number;
+    breaker?: string;
+    selectivity_ok?: boolean;
   }>;
   edges: SystemEdgeResult[];
+  breakers?: SystemBreakerResult[];
   warnings: string[];
   graph_updates?: SystemGraphUpdate[];
+  node_graph_updates?: SystemNodeGraphUpdate[];
   summary: Record<string, unknown>;
 };
 
@@ -157,8 +183,31 @@ export async function fetchSystemDefaults(): Promise<SystemDefaults> {
   return res.json();
 }
 
-export async function fetchTransformers() {
-  const res = await fetch(`${API_URL}/api/v1/catalog/transformers/`, { next: { revalidate: 300 } });
+export type TransformerItem = {
+  id: number;
+  name: string;
+  s_kva: number;
+  u_primary_kv: number;
+  u_secondary_v: number;
+  uk_percent: number;
+};
+
+export async function fetchTransformers(params?: {
+  u_primary_kv?: number;
+  u_secondary_v?: number;
+  s_kva_min?: number;
+  s_kva_max?: number;
+}): Promise<TransformerItem[]> {
+  const qs = new URLSearchParams();
+  if (params?.u_primary_kv != null) qs.set("u_primary_kv", String(params.u_primary_kv));
+  if (params?.u_secondary_v != null) qs.set("u_secondary_v", String(params.u_secondary_v));
+  if (params?.s_kva_min != null) qs.set("s_kva_min", String(params.s_kva_min));
+  if (params?.s_kva_max != null) qs.set("s_kva_max", String(params.s_kva_max));
+  const query = qs.toString();
+  const res = await fetch(
+    `${API_URL}/api/v1/catalog/transformers/${query ? `?${query}` : ""}`,
+    { next: { revalidate: 300 } }
+  );
   if (!res.ok) return [];
   return res.json();
 }
