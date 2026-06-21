@@ -148,24 +148,42 @@ export function vruSwitchLabel(
   return sw === "closed" ? "СВ замкнут" : "СВ разомкнут";
 }
 
-/** Y-центры строк ВРУ (2 секции) в px */
-export function vruRowCenters(nodeHeight: number): [number, number] {
-  const rowH = nodeHeight / 2;
-  return [rowH * 0.5, rowH * 1.5];
+/** Высота строки заголовка узла ВРУ (над схемой секций) */
+export const VRU_HEADER_PX = 24;
+
+/** Высота области схемы С1 — СВ — С2 */
+export const VRU_SCHEMATIC_H_PX = 132;
+
+/** Y-центры секций С1 и С2 внутри области схемы (px) */
+export const VRU_SECTION_ROW_Y: [number, number] = [24, 108];
+
+/** Y-центр секционного выключателя внутри области схемы (px) */
+export const VRU_SV_ROW_Y = 66;
+
+/** Y-центры строк схемы (2 секции) в px */
+export function vruRowCenters(_schematicHeight: number = VRU_SCHEMATIC_H_PX): [number, number] {
+  return VRU_SECTION_ROW_Y;
+}
+
+export function vruSchematicTop(): number {
+  return VRU_HEADER_PX;
 }
 
 export function vruHandleTop(
   handleId: string,
   scheme: VruScheme | string,
-  nodeHeight: number
+  _nodeHeight?: number
 ): number {
-  const [r0, r1] = vruRowCenters(nodeHeight);
-  if (handleId === "in-0" && !vruDualInputs(scheme)) return nodeHeight / 2;
+  const top = vruSchematicTop();
+  const [r0, r1] = vruRowCenters();
+  if (handleId === "in-0" && !vruDualInputs(scheme)) {
+    return top + VRU_SV_ROW_Y;
+  }
   const idx = portSectionIndex(handleId);
-  return idx === 0 ? r0 : r1;
+  return top + (idx === 0 ? r0 : r1);
 }
 
 export function vruNodeHeight(hasTap: boolean): number {
-  const base = 108;
+  const base = VRU_HEADER_PX + VRU_SCHEMATIC_H_PX;
   return hasTap ? base + 8 : base;
 }

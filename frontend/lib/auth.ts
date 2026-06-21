@@ -52,7 +52,17 @@ export async function registerUser(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || "Registration failed");
+    const detail = typeof err.detail === "string" ? err.detail : "";
+    if (detail === "Username already taken") {
+      throw new Error("Этот логин уже занят");
+    }
+    if (detail === "Email already registered") {
+      throw new Error("Этот email уже зарегистрирован");
+    }
+    if (detail === "Password must be at least 6 characters") {
+      throw new Error("Пароль должен быть не короче 6 символов");
+    }
+    throw new Error(detail || "Ошибка регистрации");
   }
   return res.json();
 }
@@ -68,7 +78,13 @@ export async function loginUser(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || "Login failed");
+    const detail = typeof err.detail === "string" ? err.detail : "";
+    if (detail === "Invalid credentials") {
+      throw new Error(
+        "Неверный логин или пароль. Аккаунт с другого ПК здесь не действует — зарегистрируйтесь на этой машине."
+      );
+    }
+    throw new Error(detail || "Ошибка входа");
   }
   return res.json();
 }

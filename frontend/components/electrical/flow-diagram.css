@@ -17,9 +17,17 @@
   cursor: default;
 }
 
-/* Узлы */
+/* Узлы — прозрачная обёртка, цвет фона на кастомном блоке внутри */
 .system-flow .react-flow__node {
   cursor: default;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.system-flow .react-flow__node > * {
+  width: 100%;
 }
 
 .system-flow .react-flow__node.dragging {

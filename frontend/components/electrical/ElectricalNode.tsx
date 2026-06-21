@@ -1,7 +1,7 @@
 "use client";
 
-import { createContext, memo, useCallback, useContext } from "react";
-import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { createContext, memo, useCallback, useContext, useEffect } from "react";
+import { Handle, Position, useUpdateNodeInternals, type NodeProps } from "@xyflow/react";
 
 import type { NodePort } from "@/lib/nodePorts";
 import { NODE_BLOCK_CLASSES } from "@/lib/systemNodes";
@@ -12,9 +12,13 @@ import {
   vruHasSectionSwitch,
   vruInputLabel,
   vruNodeHeight,
-  vruRowCenters,
+  vruSchematicTop,
   vruSectionsMerged,
   vruSwitchLabel,
+  VRU_HEADER_PX,
+  VRU_SCHEMATIC_H_PX,
+  VRU_SECTION_ROW_Y,
+  VRU_SV_ROW_Y,
   type VruScheme,
   type VruSectionBreaker,
   type VruSectionLoad,
@@ -111,93 +115,98 @@ function VruSchematic({
   onToggleSwitch: () => void;
 }) {
   const active = vruActiveSections(operatingMode as "normal" | "section1" | "section2");
-  const dualIn = vruDualInputs(scheme);
   const showSv = vruHasSectionSwitch(scheme);
   const isClosed = sectionSwitch === "closed";
 
   const sectionBox = (idx: 0 | 1) =>
-    `flex h-9 w-10 items-center justify-center rounded border-2 text-[9px] font-bold transition ${
+    `box-border flex shrink-0 items-center justify-center rounded border-2 text-[9px] font-bold leading-none transition ${
       active.has(idx)
         ? "border-amber-300/90 bg-amber-900/55 text-amber-100"
         : "border-slate-600/50 bg-slate-900/40 text-slate-500 opacity-45"
     } ${merged && active.has(idx) ? "ring-1 ring-sky-400/45" : ""}`;
 
+  const BUS_TICK_PX = 6;
+  const BUS_GAP_PX = 4;
+
+  const BusTick = () => (
+    <div
+      className="w-0.5 shrink-0 rounded bg-amber-400/45"
+      style={{ height: BUS_TICK_PX }}
+    />
+  );
+
+  const BusGap = () => <div className="shrink-0" style={{ height: BUS_GAP_PX }} />;
+
   return (
-    <div className="relative mx-auto grid w-full max-w-[148px] grid-cols-[1fr_auto_1fr] grid-rows-2 gap-x-0.5 gap-y-0 px-0.5">
-      {/* Вертикальные шины С1 — СВ — С2 */}
-      <div className="pointer-events-none absolute left-[calc(50%-1px)] top-[14%] h-[72%] w-0.5 bg-amber-400/35" />
+    <div className="flex h-full flex-col items-center justify-start pt-0">
+      <BusTick />
+      <BusGap />
+      <div className={sectionBox(0)} style={{ width: 32, height: 28 }}>
+        С1
+      </div>
+      <BusGap />
+      <BusTick />
+      <BusGap />
 
-      <div className="col-start-1 row-start-1 flex items-center justify-end pr-0.5">
-        <div className={sectionBox(0)}>С1</div>
-      </div>
-      <div className="col-start-1 row-start-2 flex items-center justify-end pr-0.5">
-        <div className={sectionBox(1)}>С2</div>
-      </div>
-
-      <div className="col-start-2 row-span-2 flex flex-col items-center justify-center">
-        {showSv ? (
-          <button
-            type="button"
-            title={
-              isClosed
-                ? "Секционный выключатель замкнут"
-                : "Секционный выключатель разомкнут"
-            }
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleSwitch();
-            }}
-            className={`z-10 flex h-7 w-7 flex-col items-center justify-center rounded border transition ${
-              isClosed
-                ? "border-sky-400/90 bg-sky-950/70 hover:bg-sky-900/80"
-                : "border-slate-500/80 bg-slate-900/70 hover:border-sky-400/70"
-            }`}
-          >
-            <span
-              className={`block h-0.5 w-4 rounded ${isClosed ? "bg-sky-300" : "bg-slate-400"}`}
-            />
-            <span className="mt-0.5 text-[6px] font-semibold uppercase tracking-wide text-slate-300">
-              СВ
-            </span>
-          </button>
-        ) : (
-          <div className="flex h-7 w-4 items-center justify-center text-[10px] text-slate-600">
-            ‖
-          </div>
-        )}
-      </div>
-
-      <div className="col-start-3 row-start-1 flex items-center justify-start pl-0.5 opacity-0">
-        <span className="text-[8px]">→</span>
-      </div>
-      <div className="col-start-3 row-start-2 flex items-center justify-start pl-0.5 opacity-0">
-        <span className="text-[8px]">→</span>
-      </div>
-
-      {!dualIn && (
-        <div className="pointer-events-none col-span-3 row-span-2 flex items-center justify-start pl-1">
-          <span className="text-[8px] font-medium text-amber-200/70">Ввод</span>
+      {showSv ? (
+        <button
+          type="button"
+          title={
+            isClosed
+              ? "Секционный выключатель замкнут"
+              : "Секционный выключатель разомкнут"
+          }
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleSwitch();
+          }}
+          style={{ width: 28, height: 28 }}
+          className={`box-border flex shrink-0 flex-col items-center justify-center rounded border p-0 transition ${
+            isClosed
+              ? "border-sky-400/90 bg-sky-950/70 hover:bg-sky-900/80"
+              : "border-slate-500/80 bg-slate-900/70 hover:border-sky-400/70"
+          }`}
+        >
+          <span
+            className={`block h-0.5 w-3 shrink-0 rounded ${isClosed ? "bg-sky-300" : "bg-slate-400"}`}
+          />
+          <span className="mt-0.5 shrink-0 text-[6px] font-semibold uppercase leading-none tracking-wide text-slate-300">
+            СВ
+          </span>
+        </button>
+      ) : (
+        <div
+          className="flex shrink-0 items-center justify-center text-[10px] text-slate-600"
+          style={{ width: 16, height: 28 }}
+        >
+          ‖
         </div>
       )}
+
+      <BusGap />
+      <BusTick />
+      <BusGap />
+      <div className={sectionBox(1)} style={{ width: 32, height: 28 }}>
+        С2
+      </div>
+      <BusGap />
+      <BusTick />
     </div>
   );
 }
 
-function VruInputLabels({
-  scheme,
-  nodeHeight,
-}: {
-  scheme: VruScheme;
-  nodeHeight: number;
-}) {
+function VruInputLabels({ scheme }: { scheme: VruScheme }) {
   const dualIn = vruDualInputs(scheme);
-  const [r0, r1] = vruRowCenters(nodeHeight);
+  const schematicTop = vruSchematicTop();
+  const [r0, r1] = VRU_SECTION_ROW_Y;
+  const labelCls =
+    "pointer-events-none absolute left-0.5 z-[2] max-w-[2.25rem] text-[7px] font-medium leading-tight text-amber-200/85";
 
   if (!dualIn) {
     return (
       <div
-        className="pointer-events-none absolute left-7 text-[8px] font-medium text-amber-200/85"
-        style={{ top: nodeHeight / 2 - 6 }}
+        className={labelCls}
+        style={{ top: schematicTop + VRU_SV_ROW_Y, transform: "translateY(-50%)" }}
       >
         {vruInputLabel(scheme, 0)}
       </div>
@@ -207,14 +216,14 @@ function VruInputLabels({
   return (
     <>
       <div
-        className="pointer-events-none absolute left-7 text-[8px] font-medium text-amber-200/85"
-        style={{ top: r0 - 6 }}
+        className={labelCls}
+        style={{ top: schematicTop + r0, transform: "translateY(-50%)" }}
       >
         {vruInputLabel(scheme, 0)}
       </div>
       <div
-        className="pointer-events-none absolute left-7 text-[8px] font-medium text-amber-200/85"
-        style={{ top: r1 - 6 }}
+        className={labelCls}
+        style={{ top: schematicTop + r1, transform: "translateY(-50%)" }}
       >
         {vruInputLabel(scheme, 1)}
       </div>
@@ -279,6 +288,7 @@ function PortControls({
 function ElectricalNode({ id, data, selected }: NodeProps) {
   const d = data as ElectricalNodeData;
   const actions = useContext(NodePortContext);
+  const updateNodeInternals = useUpdateNodeInternals();
   const ntype = d.node_type || "load";
   const color = COLORS[ntype] || COLORS.load;
   const isSource = ntype === "transformer_substation";
@@ -311,10 +321,23 @@ function ElectricalNode({ id, data, selected }: NodeProps) {
   const sectionBreakers = d.vru_section_breakers ?? [];
   const sectionLoads = d.vru_sections ?? [];
 
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [
+    id,
+    updateNodeInternals,
+    inputPorts.length,
+    outputPorts.length,
+    tapPorts.length,
+    nodeHeight,
+    isVru,
+    vruScheme,
+  ]);
+
   return (
     <div
-      className={`relative flex min-w-[160px] items-stretch overflow-visible rounded-xl border-2 shadow-lg ${color} ${
-        isVru ? "min-w-[200px]" : ""
+      className={`relative flex w-full min-w-[160px] items-stretch overflow-visible rounded-xl border-2 shadow-lg ${color} ${
+        isVru ? "min-w-[220px]" : ""
       } ${d.has_violation ? "ring-2 ring-red-400/80" : selected ? "ring-2 ring-white/30" : ""}`}
       style={{ minHeight: nodeHeight }}
     >
@@ -351,7 +374,7 @@ function ElectricalNode({ id, data, selected }: NodeProps) {
               style={{ top: vruHandleTop(port.id, vruScheme, nodeHeight) }}
             />
           ))}
-          <VruInputLabels scheme={vruScheme} nodeHeight={nodeHeight} />
+          <VruInputLabels scheme={vruScheme} />
         </>
       ) : (
         <>
@@ -389,18 +412,45 @@ function ElectricalNode({ id, data, selected }: NodeProps) {
         />
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col items-center justify-center px-1 py-1.5 text-center">
-        <p className="font-semibold text-slate-100">{displayLabel}</p>
+      {isVru && (
+        <>
+          <p
+            className="pointer-events-none absolute inset-x-0 top-0 z-[1] flex h-6 items-center justify-center px-1 text-center text-sm font-semibold leading-none text-slate-100"
+            style={{ height: VRU_HEADER_PX }}
+          >
+            {displayLabel}
+          </p>
+          <div
+            className="pointer-events-none absolute inset-x-6 z-[1] overflow-hidden"
+            style={{ top: VRU_HEADER_PX, height: VRU_SCHEMATIC_H_PX }}
+          >
+            <div className="pointer-events-auto h-full">
+              <VruSchematic
+                scheme={vruScheme}
+                sectionSwitch={vruSwitch}
+                operatingMode={vruMode}
+                merged={vruMerged}
+                onToggleSwitch={onToggleVruSwitch}
+              />
+            </div>
+          </div>
+        </>
+      )}
+
+      <div
+        className={`flex min-w-0 flex-1 flex-col items-center px-1 pb-1.5 text-center ${
+          isVru ? "justify-start pt-0.5" : "justify-center py-1.5"
+        }`}
+        style={
+          isVru
+            ? { paddingTop: VRU_HEADER_PX + VRU_SCHEMATIC_H_PX + 2 }
+            : undefined
+        }
+      >
+        {!isVru && <p className="shrink-0 font-semibold leading-tight text-slate-100">{displayLabel}</p>}
 
         {isVru && (
           <>
-            <VruSchematic
-              scheme={vruScheme}
-              sectionSwitch={vruSwitch}
-              operatingMode={vruMode}
-              merged={vruMerged}
-              onToggleSwitch={onToggleVruSwitch}
-            />
             {vruHasSectionSwitch(vruScheme) && (
               <p className="text-[9px] text-slate-500">
                 {vruSwitchLabel(vruScheme, vruSwitch)}

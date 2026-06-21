@@ -63,7 +63,12 @@ def register_user(username: str, email: str, password: str):
 
 
 def login_user(username: str, password: str):
-    user = authenticate(username=username, password=password)
+    login_id = username.strip()
+    user = authenticate(username=login_id, password=password)
+    if user is None and login_id:
+        by_email = User.objects.filter(email__iexact=login_id).first()
+        if by_email:
+            user = authenticate(username=by_email.username, password=password)
     if not user:
         raise HttpError(401, "Invalid credentials")
     return user

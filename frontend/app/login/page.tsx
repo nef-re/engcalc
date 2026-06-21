@@ -42,14 +42,18 @@ function LoginForm() {
       <div className="mx-auto max-w-md">
         <h1 className="text-2xl font-bold text-slate-100">Вход</h1>
         <p className="mt-2 text-slate-400">Личный кабинет и расчёт системы</p>
+        <p className="mt-2 text-sm text-amber-400/90">
+          На этом компьютере отдельная база данных. Если регистрировались на другом ПК — создайте аккаунт заново.
+        </p>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-4">
           <label className="block text-sm text-slate-400">
-            Логин
+            Логин или email
             <input
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               required
+              autoComplete="username"
               className="mt-1 w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-slate-100"
             />
           </label>
